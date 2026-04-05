@@ -1,0 +1,45 @@
+name: ml-debug-env
+version: 1.0.0
+description: An OpenEnv-compliant RL environment where an AI agent debugs failing ML training runs by reading logs, checking metrics, inspecting configs, and applying fixes.
+tags:
+  - openenv
+  - ml-debugging
+  - real-world
+  - rl-environment
+tasks:
+  - id: task_1
+    name: Train/Val Scaling Mismatch
+    difficulty: easy
+    description: Train accuracy 90%, Val accuracy 10%. No errors. Root cause missing Normalize in val_transform.
+  - id: task_2
+    name: Double Softmax Bug
+    difficulty: medium
+    description: Loss decreasing, accuracy also decreasing simultaneously. No errors. Root cause softmax applied twice in loss function.
+  - id: task_3
+    name: Silent Data Pipeline Failure
+    difficulty: hard
+    description: Train 94%, Val 91%, Test 23%. Zero errors. Three root causes data leakage plus class imbalance plus wrong evaluation metric.
+action_space:
+  - read_log
+  - check_metric
+  - inspect_config
+  - propose_fix
+  - apply_fix
+observation_space:
+  - task_id
+  - description
+  - difficulty
+  - visible_logs
+  - visible_metrics
+  - visible_config
+  - step_count
+  - pending_fix
+  - applied_fixes
+  - message
+  - done
+endpoints:
+  reset: POST /reset
+  step: POST /step
+  state: GET /state
+  tasks: GET /tasks
+  grader: GET /grader
