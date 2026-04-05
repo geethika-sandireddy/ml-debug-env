@@ -1,4 +1,4 @@
-"""
+'''
 inference.py - CORRECTED VERSION
 Baseline inference script using OpenAI client.
 Reads API credentials from environment variables.
@@ -51,7 +51,7 @@ def parse_action(response_text: str) -> dict:
     except Exception:
         pass
     try:
-        match = re.search(r'\{.*?\}', response_text, re.DOTALL)
+        match = re.search(r'{.*?}', response_text, re.DOTALL)
         if match:
             return json.loads(match.group())
     except Exception:
@@ -178,3 +178,161 @@ def main():
 if __name__ == "__main__":
     scores = main()
     sys.exit(0)
+'''
+
+"""
+Baseline inference script for ml-debug-env.
+
+This script uses the OpenAI client when credentials are available and falls
+back to a deterministic planner if the model response is unavailable or invalid.
+It emits only the mandatory [START], [STEP], and [END] stdout lines.
+"""
+
+import json
+import os
+from typing import Optional
+
+from openai import OpenAI
+
+from env import Action, MLDebugEnv, grade
+from env.baseline import select_next_action
+
+API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Llama-3.1-8B-Instruct")
+HF_TOKEN = os.getenv("HF_TOKEN")
+LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "")
+MAX_STEPS = 12
+TEMPERATURE = 0.0
+
+
+def build_client() -> Optional[OpenAI]:
+    if not HF_TOKEN:
+        return None
+    return OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
+
+
+def prompt_for_action(observation: dict) -> str:
+    return (
+        "You are debugging a failing ML training run inside an RL environment.\n"
+        "Return exactly one JSON object with keys action_type, target, value.\n"
+        "Allowed action_type values: read_log, check_metric, inspect_config, propose_fix, apply_fix.\n"
+        "Choose the best next action from the current observation.\n"
+        f"Observation:\n{json.dumps(observation, sort_keys=True)}"
+    )
+
+
+def extract_action(text: str) -> Optional[dict]:
+    if not text:
+        return None
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            try:
+                return json.loads(text[start : end + 1])
+            except json.JSONDecodeError:
+                return None
+    return None
+
+
+def format_action(action: Action) -> str:
+    if action.target:
+        return f"{action.action_type}('{action.target}')"
+    return f"{action.action_type}()"
+
+
+def choose_action(client: Optional[OpenAI], env: MLDebugEnv) -> tuple[Action, Optional[str]]:
+    if client is None:
+        return select_next_action(env), None
+
+    try:
+        completion = client.chat.completions.create(
+            model=MODEL_NAME,
+            temperature=TEMPERATURE,
+            max_tokens=120,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a senior ML engineer. "
+                        "Respond with JSON only and no markdown."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": prompt_for_action(env.observation().model_dump()),
+                },
+            ],
+        )
+        parsed = extract_action(completion.choices[0].message.content or "")
+        if parsed:
+            try:
+                return Action(**parsed), None
+            except Exception:
+                pass
+        return select_next_action(env), "invalid_model_action"
+    except Exception as exc:
+        return select_next_action(env), str(exc)
+
+
+def run_task(task_id: str, client: Optional[OpenAI]) -> float:
+    env = MLDebugEnv()
+    observation = env.reset(task_id=task_id)
+    rewards: list[float] = []
+
+    print(f"[START] task={task_id} env=ml-debug-env model={MODEL_NAME}", flush=True)
+
+    try:
+        for step_num in range(1, MAX_STEPS + 1):
+            if observation.done:
+                break
+
+            action, client_error = choose_action(client, env)
+            result = env.step(action)
+            observation = result.observation
+            rewards.append(round(result.reward.value, 2))
+
+            error_value = result.info.get("last_action_error") or client_error or "null"
+            done_text = "true" if result.done else "false"
+            print(
+                f"[STEP] step={step_num} action={format_action(action)} "
+                f"reward={result.reward.value:.2f} done={done_text} error={error_value}",
+                flush=True,
+            )
+
+            if result.done:
+                break
+
+        score = grade(
+            task_id=task_id,
+            applied_fixes=env.applied_fixes,
+            found_causes=env.found_causes,
+        )
+        rewards_str = ",".join(f"{reward:.2f}" for reward in rewards)
+        print(
+            f"[END] success={'true' if score >= 0.99 else 'false'} steps={len(rewards)} "
+            f"score={score:.2f} rewards={rewards_str}",
+            flush=True,
+        )
+        return score
+    except Exception:
+        rewards_str = ",".join(f"{reward:.2f}" for reward in rewards)
+        print(
+            f"[END] success=false steps={len(rewards)} score=0.00 rewards={rewards_str}",
+            flush=True,
+        )
+        return 0.0
+
+
+def main() -> int:
+    client = build_client()
+    for task_id in ("task_1", "task_2", "task_3"):
+        run_task(task_id, client)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
