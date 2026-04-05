@@ -1,6 +1,6 @@
 # ML Training Run Debugger
 
-An OpenEnv-compliant RL environment where an AI agent acts as a senior ML engineer debugging failing training runs.
+An OpenEnv-compliant RL environment where an agent acts as a senior ML engineer debugging failing training runs.
 
 ## What This Environment Does
 
@@ -54,11 +54,13 @@ docker run -p 7860:7860 \
 
 ## API Endpoints
 
+- GET / - Health check
 - POST /reset - Start new episode
 - POST /step - Take one action  
 - GET /state - Current state
 - GET /tasks - Task list
 - GET /grader - Current grader score
+- GET /baseline - Scripted baseline results
 
 ## OpenEnv Compliance
 
