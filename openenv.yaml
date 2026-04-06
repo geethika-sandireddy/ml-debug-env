@@ -1,0 +1,55 @@
+spec_version: 1
+name: ml-debug-env
+version: 1.0.0
+description: OpenEnv-style environment for debugging failing ML training runs.
+runtime: fastapi
+app: main:app
+port: 7860
+tags:
+  - openenv
+  - debugging
+  - ml
+  - reinforcement-learning
+typed_models:
+  action: env.environment.Action
+  observation: env.environment.Observation
+  reward: env.environment.Reward
+tasks:
+  - id: task_1
+    name: Validation Transform Bug
+    difficulty: easy
+    description: Train accuracy climbs but validation stays flat because val normalization is missing.
+  - id: task_2
+    name: Double Softmax
+    difficulty: medium
+    description: Loss decreases while accuracy decreases because logits are softmaxed twice.
+  - id: task_3
+    name: Silent Generalization Failure
+    difficulty: hard
+    description: Strong train and validation numbers hide leakage, imbalance, and a misleading metric.
+action_space:
+  - read_log
+  - check_metric
+  - inspect_config
+  - propose_fix
+  - apply_fix
+observation_space:
+  - task_id
+  - description
+  - difficulty
+  - visible_logs
+  - visible_metrics
+  - visible_config
+  - step_count
+  - pending_fix
+  - applied_fixes
+  - message
+  - done
+endpoints:
+  health: GET /
+  reset: POST /reset
+  step: POST /step
+  state: GET /state
+  tasks: GET /tasks
+  grader: GET /grader
+  baseline: GET /baseline
