@@ -4,8 +4,8 @@ from env.graders import grade
 
 TASK_PLANS = {
     "task_1": [
-        Action(action_type="inspect_config", target="train_transform"),
         Action(action_type="inspect_config", target="val_transform"),
+        Action(action_type="read_log", target="augmentation_trace"),
         Action(action_type="propose_fix", target="add_normalize_to_val_transform"),
         Action(action_type="apply_fix"),
     ],
@@ -18,12 +18,14 @@ TASK_PLANS = {
     "task_3": [
         Action(action_type="read_log", target="data_pipeline"),
         Action(action_type="inspect_config", target="split_strategy"),
-        Action(action_type="check_metric", target="class_distribution"),
-        Action(action_type="inspect_config", target="evaluation_metric"),
         Action(action_type="propose_fix", target="enforce_subject_wise_dataset_split"),
         Action(action_type="apply_fix"),
+        Action(action_type="check_metric", target="class_distribution"),
+        Action(action_type="check_metric", target="minority_recall_table"),
         Action(action_type="propose_fix", target="add_weighted_sampler_or_class_weighting"),
         Action(action_type="apply_fix"),
+        Action(action_type="inspect_config", target="evaluation_metric"),
+        Action(action_type="read_log", target="evaluation_log"),
         Action(action_type="propose_fix", target="report_macro_f1_instead_of_accuracy"),
         Action(action_type="apply_fix"),
     ],
@@ -70,6 +72,9 @@ def run_baseline_suite() -> dict:
             task_id=task_id,
             applied_fixes=env.applied_fixes,
             found_causes=env.found_causes,
+            evidence=env.evidence,
+            steps=env.step_count,
+            premature_required_fixes=env.premature_required_fixes,
         )
         results.append(
             {

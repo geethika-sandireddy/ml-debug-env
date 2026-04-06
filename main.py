@@ -69,6 +69,9 @@ def grader() -> dict:
             task_id=env.task_id,
             applied_fixes=env.applied_fixes,
             found_causes=env.found_causes,
+            evidence=env.evidence,
+            premature_required_fixes=env.premature_required_fixes,
+            steps=env.step_count,
         )
         if env.task_id
         else 0.0,

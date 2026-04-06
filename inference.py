@@ -122,6 +122,9 @@ def run_task(task_id: str, client: Optional[OpenAI]) -> float:
             task_id=task_id,
             applied_fixes=env.applied_fixes,
             found_causes=env.found_causes,
+            evidence=env.evidence,
+            premature_required_fixes=env.premature_required_fixes,
+            steps=env.step_count,
         )
         return score
     except Exception:
@@ -129,13 +132,21 @@ def run_task(task_id: str, client: Optional[OpenAI]) -> float:
     finally:
         env.close()
         rewards_str = ",".join(f"{reward:.2f}" for reward in rewards)
-        score = grade(
-            task_id=task_id,
-            applied_fixes=env.applied_fixes,
-            found_causes=env.found_causes,
-        ) if env.task_id else 0.0
+        score = (
+            grade(
+                task_id=task_id,
+                applied_fixes=env.applied_fixes,
+                found_causes=env.found_causes,
+                evidence=env.evidence,
+                premature_required_fixes=env.premature_required_fixes,
+                steps=env.step_count,
+            )
+            if env.task_id
+            else 0.0
+        )
+        success_threshold = 0.1  # competition-style threshold
         print(
-            f"[END] success={'true' if score >= 0.99 else 'false'} steps={len(rewards)} "
+            f"[END] success={'true' if score >= success_threshold else 'false'} steps={len(rewards)} "
             f"score={score:.2f} rewards={rewards_str}",
             flush=True,
         )

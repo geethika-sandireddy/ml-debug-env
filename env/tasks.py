@@ -12,6 +12,10 @@ TASKS = {
         ),
         "required_causes": ["missing_val_normalize"],
         "required_fixes": ["add_normalize_to_val_transform"],
+        "required_evidence": [
+            "ev_val_transform_no_normalize",
+            "ev_augmentation_trace_preproc_mismatch",
+        ],
         "max_steps": 8,
     },
     "task_2": {
@@ -24,6 +28,10 @@ TASKS = {
         ),
         "required_causes": ["double_softmax_before_cross_entropy"],
         "required_fixes": ["remove_redundant_softmax_before_cross_entropy"],
+        "required_evidence": [
+            "ev_loss_log_softmax_before_ce",
+            "ev_loss_function_expects_logits",
+        ],
         "max_steps": 8,
     },
     "task_3": {
@@ -43,6 +51,14 @@ TASKS = {
             "enforce_subject_wise_dataset_split",
             "add_weighted_sampler_or_class_weighting",
             "report_macro_f1_instead_of_accuracy",
+        ],
+        "required_evidence": [
+            "ev_patient_leak_from_data_pipeline",
+            "ev_split_strategy_patient_level",
+            "ev_class_distribution_imbalance",
+            "ev_minority_recall_low",
+            "ev_eval_metric_accuracy_only",
+            "ev_eval_log_dashboard_misleading",
         ],
         "max_steps": 12,
     },

@@ -49,6 +49,8 @@ class MLDebugEnv:
         self.pending_fix: str | None = None
         self.applied_fixes: list[str] = []
         self.found_causes: set[str] = set()
+        self.evidence: set[str] = set()
+        self.premature_required_fixes = 0
         self.visible_logs: dict[str, str] = {}
         self.visible_metrics: dict[str, str] = {}
         self.visible_config: dict[str, str] = {}
@@ -68,6 +70,8 @@ class MLDebugEnv:
         self.pending_fix = None
         self.applied_fixes = []
         self.found_causes = set()
+        self.evidence = set()
+        self.premature_required_fixes = 0
         self.visible_logs = {}
         self.visible_metrics = {}
         self.visible_config = {}
@@ -122,6 +126,9 @@ class MLDebugEnv:
                 task_id=self.task["id"],
                 applied_fixes=self.applied_fixes,
                 found_causes=self.found_causes,
+                evidence=self.evidence,
+                premature_required_fixes=self.premature_required_fixes,
+                steps=self.step_count,
             ),
         }
 
@@ -144,6 +151,7 @@ class MLDebugEnv:
         reward_value = 0.0
         reward_reason = "No useful progress."
         action_key = (action.action_type, action.target)
+        STEP_COST = 0.01
 
         if action_key in self._seen_actions and action.action_type != "apply_fix":
             self.last_action_error = "repeated_action"
@@ -157,6 +165,7 @@ class MLDebugEnv:
         if reward_value > 0.0:
             efficiency = max(0.6, 1.0 - 0.03 * (self.step_count - 1))
             reward_value *= efficiency
+        reward_value = max(0.0, reward_value - STEP_COST)
 
         if self.step_count >= self.task["max_steps"] and not self.done:
             self.done = True
@@ -173,6 +182,9 @@ class MLDebugEnv:
                     task_id=self.task_id,
                     applied_fixes=self.applied_fixes,
                     found_causes=self.found_causes,
+                    evidence=self.evidence,
+                    premature_required_fixes=self.premature_required_fixes,
+                    steps=self.step_count,
                 ),
             },
         )
@@ -208,19 +220,24 @@ class MLDebugEnv:
             return 0.0, "Invalid target."
 
         store_map[bucket][target] = source[target]
-        reward = 0.1
+        reward = 0.05
         reason = f"Revealed {bucket[:-1]} '{target}'."
 
-        trigger = self.task_data["cause_triggers"].get(
-            (
-                "read_log" if bucket == "logs" else "check_metric" if bucket == "metrics" else "inspect_config",
-                target,
-            )
-        )
-        if trigger and trigger not in self.found_causes:
-            self.found_causes.add(trigger)
-            reward += 0.2
-            reason = f"Discovered root cause '{trigger}'."
+        action_type = "read_log" if bucket == "logs" else "check_metric" if bucket == "metrics" else "inspect_config"
+        evidence_ids = self.task_data.get("evidence_triggers", {}).get((action_type, target), [])
+        for evidence_id in evidence_ids:
+            if evidence_id not in self.evidence:
+                self.evidence.add(evidence_id)
+                reward += 0.05
+                reason = f"Added evidence '{evidence_id}'."
+
+        for cause_id, required_evidence in self.task_data.get("cause_requirements", {}).items():
+            if cause_id in self.found_causes:
+                continue
+            if all(req in self.evidence for req in required_evidence):
+                self.found_causes.add(cause_id)
+                reward += 0.2
+                reason = f"Confirmed root cause '{cause_id}'."
 
         self.message = reason
         if self._all_fixes_applied():
@@ -240,10 +257,24 @@ class MLDebugEnv:
             return 0.0, "Fix already applied."
 
         self.pending_fix = fix_id
-        missing_causes = [cause for cause in fixes[fix_id]["addresses"] if cause not in self.found_causes]
-        reward = 0.15 if not missing_causes else 0.05
-        self.message = f"Queued fix '{fix_id}' for application."
-        return reward, self.message
+        required_fixes = self.task["required_fixes"] if self.task else []
+        is_required_fix = fix_id in required_fixes
+        addressed_causes = fixes[fix_id].get("addresses", [])
+        missing_causes = [cause for cause in addressed_causes if cause not in self.found_causes]
+
+        if not is_required_fix:
+            self.last_action_error = "wrong_fix"
+            self.message = f"Queued wrong fix '{fix_id}' (not required for this task)."
+            return 0.05, self.message
+
+        if missing_causes:
+            self.last_action_error = "insufficient_evidence"
+            self.message = f"Queued required fix '{fix_id}', but evidence is missing."
+            return 0.0, self.message
+
+        self.last_action_error = None
+        self.message = f"Queued required fix '{fix_id}' for application."
+        return 0.15, self.message
 
     def _apply_fix(self) -> tuple[float, str]:
         if not self.pending_fix:
@@ -259,8 +290,24 @@ class MLDebugEnv:
             return 0.0, "Fix already applied."
 
         self.applied_fixes.append(fix_id)
-        reward = 0.35
-        self.message = f"Applied fix '{fix_id}'."
+        required_fixes = self.task["required_fixes"] if self.task else []
+        is_required_fix = fix_id in required_fixes
+        addressed_causes = fixes = self.task_data["fixes"].get(fix_id, {}).get("addresses", [])
+        missing_causes_now = [cause for cause in addressed_causes if cause not in self.found_causes]
+
+        if not is_required_fix:
+            self.last_action_error = "wrong_fix_applied"
+            reward = 0.05
+            self.message = f"Applied wrong fix '{fix_id}'."
+        elif missing_causes_now:
+            self.last_action_error = "premature_fix"
+            self.premature_required_fixes += 1
+            reward = 0.15
+            self.message = f"Applied required fix '{fix_id}' early (missing evidence)."
+        else:
+            self.last_action_error = None
+            reward = 0.45
+            self.message = f"Applied correct fix '{fix_id}'."
 
         if self._all_fixes_applied():
             self.done = True

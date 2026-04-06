@@ -1,13 +1,3 @@
----
-title: ML Debug Env
-emoji: 🧪
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # ML Training Run Debugger
 
 OpenEnv environment where the agent debugs broken training runs: read logs and metrics, inspect configs, then propose and apply fixes. FastAPI server, three graded tasks (easy → hard).
