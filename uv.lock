@@ -1,0 +1,2 @@
+# Placeholder lockfile for OpenEnv multi-mode validation.
+# Generate a real lockfile with `uv lock` in a full development environment.
