@@ -10,30 +10,35 @@ pinned: false
 
 # ML Training Run Debugger
 
-An OpenEnv-compliant RL environment where an agent acts as a senior ML engineer debugging failing training runs.
+OpenEnv environment where the agent debugs broken training runs: read logs and metrics, inspect configs, then propose and apply fixes. FastAPI server, three graded tasks (easy → hard).
 
-## What This Environment Does
+**Live Space:** [geetss-ml-debug-env.hf.space](https://geetss-ml-debug-env.hf.space)
 
-The agent investigates broken ML training sessions by reading logs, checking metrics, inspecting configs, and applying fixes.
+## Motivation
+
+These are recurring real issues: train/val preprocessing mismatch, softmax applied twice before CE, and “good” train/val numbers that hide leakage, imbalance, or a misleading metric. The env encodes each as a small scripted scenario with deterministic grading.
 
 ## Tasks
 
-### Task 1 - Easy: Train/Val Scaling Mismatch
-- Symptom: Train accuracy 90%, Val accuracy stuck at 10%. Zero errors.
-- Root cause: `val_transform` is missing the `Normalize` step.
-- Agent must: inspect both transforms, identify the missing step, propose the fix, and apply it.
+### Task 1 — easy: train/val scaling mismatch
 
-### Task 2 - Medium: Double Softmax Bug
-- Symptom: Loss decreases every epoch while accuracy also decreases every epoch.
-- Root cause: Softmax is applied twice in the loss path.
-- Agent must: inspect the loss computation, identify the double softmax bug, and apply the fix.
+- Symptom: high train accuracy, flat validation.
+- Likely cause: validation pipeline missing normalization that training has.
+- Goal: find it in the configs, propose the matching fix, apply it.
 
-### Task 3 - Hard: Silent Data Pipeline Failure
-- Symptom: Train 94%, validation 91%, test 23%, with zero runtime errors.
-- Root causes: data leakage, class imbalance, and the wrong evaluation metric.
-- Agent must: inspect data pipeline, class distribution, and evaluation config separately, then apply all three fixes.
+### Task 2 — medium: double softmax
 
-## Action Space
+- Symptom: loss goes down while accuracy goes down.
+- Likely cause: logits passed through softmax twice on the way to cross-entropy.
+- Goal: trace the loss path and apply the fix.
+
+### Task 3 — hard: silent generalization failure
+
+- Symptom: strong train/val, weak test, no crashes.
+- Causes: split leakage, class skew, wrong headline metric.
+- Goal: surface each issue and apply all three fixes.
+
+## Actions
 
 - `read_log(target)`
 - `check_metric(target)`
@@ -41,80 +46,61 @@ The agent investigates broken ML training sessions by reading logs, checking met
 - `propose_fix(target)`
 - `apply_fix()`
 
-## Observation Space
+## Observations
 
-- `task_id`
-- `description`
-- `difficulty`
-- `visible_logs`
-- `visible_metrics`
-- `visible_config`
-- `step_count`
-- `pending_fix`
-- `applied_fixes`
-- `message`
-- `done`
+Fields include `task_id`, `description`, `difficulty`, `visible_logs`, `visible_metrics`, `visible_config`, `step_count`, `pending_fix`, `applied_fixes`, `message`, `done`.
 
-## Setup
-
-### Local Development
+## Local run
 
 ```bash
 pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 7860
 ```
 
-### Run Baseline Inference
+## Baseline (`inference.py`)
+
+Uses the OpenAI-compatible client with env vars below. If there is no token, it falls back to a small scripted policy so the script still finishes.
 
 ```bash
 export API_BASE_URL="https://router.huggingface.co/v1"
 export MODEL_NAME="meta-llama/Llama-3.1-8B-Instruct"
-export HF_TOKEN="your_huggingface_api_key_here"
+export HF_TOKEN="your_token"
 python inference.py
 ```
 
-Required environment variables for submission:
-- `API_BASE_URL`
-- `MODEL_NAME`
-- `HF_TOKEN`
+Required for the competition: `API_BASE_URL`, `MODEL_NAME`, `HF_TOKEN`.
 
-`inference.py` prints strict structured logs in this order for each task:
-- `[START]`
-- `[STEP]` (one line per call to `step`)
-- `[END]` (always emitted once per task)
+Stdout format (per task): one `[START]`, one `[STEP]` per `step()`, one `[END]` after `close()`.
 
-### Docker
+## Docker
 
 ```bash
 docker build -t ml-debug-env .
 docker run -p 7860:7860 \
   -e API_BASE_URL="https://router.huggingface.co/v1" \
   -e MODEL_NAME="meta-llama/Llama-3.1-8B-Instruct" \
-  -e HF_TOKEN="your_token_here" \
+  -e HF_TOKEN="your_token" \
   ml-debug-env
 ```
 
-## API Endpoints
+## HTTP API
 
-- GET `/` - Health check
-- POST `/reset` - Start new episode
-- POST `/step` - Take one action
-- GET `/state` - Current state
-- GET `/tasks` - Task list
-- GET `/grader` - Current grader score
-- GET `/baseline` - Scripted baseline results
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/` | Health |
+| POST | `/reset` | New episode |
+| POST | `/step` | One action |
+| GET | `/state` | Current state |
+| GET | `/tasks` | Task list |
+| GET | `/grader` | Score snapshot |
+| GET | `/baseline` | Scripted baseline |
 
-## OpenEnv Compliance
+## Notes
 
-- Typed Pydantic models: `Action`, `Observation`, and `Reward`
-- `reset()` returns the initial observation
-- `step()` returns observation, reward, done, and info
-- `state()` returns the current environment state
-- `openenv.yaml` documents task specifications and endpoints
-- Deterministic graders return scores in the range `[0.0, 1.0]`
+- Typed models: `Action`, `Observation`, `Reward` (see `env/environment.py`).
+- `openenv.yaml` describes tasks and endpoints.
+- Graders are deterministic; scores are in `[0.0, 1.0]`.
 
-## Baseline Scores
+## Baseline scores (scripted policy)
 
-- `task_1`: `1.00`
-- `task_2`: `1.00`
-- `task_3`: `1.00`
+With the bundled planner: task_1, task_2, task_3 each reach `1.00` when run to completion.

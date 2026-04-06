@@ -1,10 +1,4 @@
-"""
-Baseline inference script for ml-debug-env.
-
-This script uses the OpenAI client when credentials are available and falls
-back to a deterministic planner if the model response is unavailable or invalid.
-It emits only the mandatory [START], [STEP], and [END] stdout lines.
-"""
+"""Baseline runner: OpenAI client if HF_TOKEN is set, else built-in policy. Logs [START]/[STEP]/[END]."""
 
 import json
 import os

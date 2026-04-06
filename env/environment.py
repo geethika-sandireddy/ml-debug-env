@@ -153,8 +153,7 @@ class MLDebugEnv:
             self._seen_actions.add(action_key)
             reward_value, reward_reason = self._apply_action(action)
 
-        # Efficiency shaping: late progress receives slightly smaller reward,
-        # which discourages loops and noisy trajectories.
+        # Slightly lower reward later in the episode (keeps trajectories from dragging).
         if reward_value > 0.0:
             efficiency = max(0.6, 1.0 - 0.03 * (self.step_count - 1))
             reward_value *= efficiency
