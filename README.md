@@ -1,3 +1,13 @@
+---
+title: ML Debug Env
+emoji: 🧪
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # ML Training Run Debugger
 
 An OpenEnv-compliant RL environment where an agent acts as a senior ML engineer debugging failing training runs.
