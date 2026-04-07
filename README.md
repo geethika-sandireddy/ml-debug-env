@@ -16,13 +16,31 @@ pinned: false
 
 # ML Training Run Debugger
 
-OpenEnv environment where the agent debugs broken training runs: read logs and metrics, inspect configs, then propose and apply fixes. FastAPI server, three graded tasks (easy -> hard).
+OpenEnv environment where an agent debugs broken training runs: read logs and metrics, inspect configs, then propose and apply fixes. The benchmark is packaged as a FastAPI server with three deterministic tasks ordered from easy to hard.
 
 **Live Space:** [geetss-ml-debug-env.hf.space](https://geetss-ml-debug-env.hf.space)
 
 ## Motivation
 
-These are recurring real issues: train/val preprocessing mismatch, softmax applied twice before CE, and "good" train/val numbers that hide leakage, imbalance, or a misleading metric. The env encodes each as a small scripted scenario with deterministic grading.
+This benchmark targets a real engineering workflow: diagnosing failed or misleading ML training runs from incomplete evidence. The tasks reflect common debugging patterns that matter for agent evaluation:
+
+- evidence gathering across logs, metrics, and configs
+- causal reasoning from multiple weak signals
+- distinguishing root causes from tempting distractors
+- proposing and applying targeted fixes instead of guessing
+
+The scenarios focus on recurring real issues: train/val preprocessing mismatch, redundant softmax before cross-entropy, and apparently healthy train/val metrics that hide leakage, imbalance, or a misleading primary metric.
+
+## Why This Is A Useful Agent Benchmark
+
+Many agent benchmarks test navigation or form-filling. This one tests something closer to senior ML debugging work:
+
+- the agent must inspect multiple information sources before acting
+- partial progress matters, not just final success
+- wrong fixes and premature fixes are penalized
+- the hard task requires uncovering multiple interacting causes
+
+That makes the environment suitable for evaluating whether an agent can debug ML systems rather than just execute a fixed script.
 
 ## Tasks
 
@@ -44,6 +62,29 @@ These are recurring real issues: train/val preprocessing mismatch, softmax appli
 - Causes: split leakage, class skew, wrong headline metric.
 - Goal: surface each issue and apply all three fixes.
 
+## Failure Mode Table
+
+| Task | Observable Symptom | Hidden Cause(s) | Tempting Wrong Path |
+|------|---------------------|-----------------|---------------------|
+| Task 1 | Train accuracy is high, validation is flat | Validation transform missing normalization | Assume learning-rate or optimizer instability |
+| Task 2 | Loss decreases while accuracy also decreases | Softmax is applied before `CrossEntropyLoss` | Tweak label smoothing or batch size instead |
+| Task 3 | Train/val look strong, test collapses | Split leakage, class imbalance, wrong primary metric | Train longer, lower LR, or trust accuracy alone |
+
+## What The Grader Rewards
+
+The grader is deterministic and combines four ideas:
+
+- evidence quality: did the agent reveal the task-critical clues?
+- diagnosis quality: did it confirm the correct root causes?
+- fix quality: did it apply the required fixes and avoid wrong ones?
+- efficiency: did it finish without wasting the full step budget?
+
+Blind guessing is intentionally weakened:
+
+- wrong fixes are penalized
+- premature fixes are penalized
+- final completion requires the required fixes, required causes, and required evidence
+
 ## Actions
 
 - `read_log(target)`
@@ -55,6 +96,15 @@ These are recurring real issues: train/val preprocessing mismatch, softmax appli
 ## Observations
 
 Fields include `task_id`, `description`, `difficulty`, `visible_logs`, `visible_metrics`, `visible_config`, `step_count`, `pending_fix`, `applied_fixes`, `message`, `done`.
+
+## Reward Design
+
+- revealing new useful information gives small positive reward
+- unlocking task-critical evidence gives higher reward
+- confirming a root cause gives a stronger reward bump
+- proposing a correct fix after enough evidence gives partial credit
+- applying the final required fix path finishes the episode
+- repeated actions, wrong fixes, and premature fixes reduce overall score
 
 ## Local run
 
@@ -77,6 +127,15 @@ python inference.py
 Required for the competition: `API_BASE_URL`, `MODEL_NAME`, `HF_TOKEN`.
 
 Stdout format (per task): one `[START]`, one `[STEP]` per `step()`, one `[END]` after `close()`.
+
+## Reference Baselines
+
+The repo exposes two useful reference behaviors:
+
+| Baseline | Purpose | Notes |
+|----------|---------|-------|
+| Scripted planner | Reproducible upper-reference trajectory | Used when fallback is enabled or through `/baseline` |
+| Model-driven inference | Competition-facing baseline path | Uses the OpenAI-compatible client with `API_BASE_URL`, `MODEL_NAME`, and `HF_TOKEN` |
 
 ## Docker
 
@@ -110,6 +169,7 @@ Session behavior:
 - Typed models: `Action`, `Observation`, `Reward` (see `env/environment.py`).
 - `openenv.yaml` describes tasks and endpoints.
 - Graders are deterministic; scores are in `[0.0, 1.0]`.
+- `tests/test_api.py` and `tests/test_graders.py` cover endpoint behavior and grading invariants.
 
 ## Baseline scores (scripted policy)
 
@@ -117,3 +177,9 @@ Current reproducible run (`python inference.py`):
 - `task_1`: `0.98`
 - `task_2`: `0.98`
 - `task_3`: `0.96`
+
+## Limitations
+
+- The environment is intentionally deterministic and compact rather than fully open-ended.
+- The current benchmark focuses on three failure families, not the full space of ML debugging issues.
+- Future extensions could add optimizer bugs, label corruption, data loader failures, and distributed training diagnostics.
