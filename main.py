@@ -1,6 +1,8 @@
 from typing import Optional
+from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from env import Action, MLDebugEnv, grade
@@ -21,7 +23,23 @@ app = FastAPI(
     version="1.0.0",
 )
 
-env = MLDebugEnv()
+DEFAULT_SESSION_ID = "default"
+_sessions: dict[str, MLDebugEnv] = {}
+
+
+def _get_env(session_id: str) -> MLDebugEnv:
+    if session_id not in _sessions:
+        _sessions[session_id] = MLDebugEnv()
+    return _sessions[session_id]
+
+
+def _session_id_from_request(request: Request, *, allow_new: bool) -> str:
+    header_value = request.headers.get("X-Session-Id")
+    if header_value:
+        return header_value
+    if allow_new:
+        return str(uuid4())
+    return DEFAULT_SESSION_ID
 
 
 @app.get("/")
@@ -34,16 +52,25 @@ def health() -> dict:
 
 
 @app.post("/reset")
-def reset(request: ResetRequest = ResetRequest()) -> dict:
+def reset(request: Request, body: ResetRequest = ResetRequest()) -> JSONResponse:
+    # Keep judge compatibility: when they don't send a header, we fall back to DEFAULT_SESSION_ID.
+    # When a header is provided, we create a separate episode per session.
+    session_id = _session_id_from_request(request, allow_new=False)
+    env = _get_env(session_id)
     try:
-        observation = env.reset(task_id=request.task_id)
+        observation = env.reset(task_id=body.task_id)
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return observation.model_dump()
+
+    resp = JSONResponse(content=observation.model_dump())
+    resp.headers["X-Session-Id"] = session_id
+    return resp
 
 
 @app.post("/step")
-def step(action: Action) -> dict:
+def step(request: Request, action: Action) -> dict:
+    session_id = _session_id_from_request(request, allow_new=False)
+    env = _get_env(session_id)
     try:
         result = env.step(action)
     except RuntimeError as exc:
@@ -52,7 +79,9 @@ def step(action: Action) -> dict:
 
 
 @app.get("/state")
-def state() -> dict:
+def state(request: Request) -> dict:
+    session_id = _session_id_from_request(request, allow_new=False)
+    env = _get_env(session_id)
     return env.state()
 
 
@@ -62,7 +91,9 @@ def tasks() -> dict:
 
 
 @app.get("/grader")
-def grader() -> dict:
+def grader(request: Request) -> dict:
+    session_id = _session_id_from_request(request, allow_new=False)
+    env = _get_env(session_id)
     return {
         "task_id": env.task_id,
         "score": grade(
