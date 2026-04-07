@@ -61,30 +61,33 @@ def run_baseline_suite() -> dict:
     results = []
     for task_id in ("task_1", "task_2", "task_3"):
         env = MLDebugEnv()
-        env.reset(task_id=task_id)
-        rewards = []
-        while not env.done and env.step_count < env.task["max_steps"]:
-            action = select_next_action(env)
-            result = env.step(action)
-            rewards.append(result.reward.value)
+        try:
+            env.reset(task_id=task_id)
+            rewards = []
+            while not env.done and env.step_count < env.task["max_steps"]:
+                action = select_next_action(env)
+                result = env.step(action)
+                rewards.append(result.reward.value)
 
-        score = grade(
-            task_id=task_id,
-            applied_fixes=env.applied_fixes,
-            found_causes=env.found_causes,
-            evidence=env.evidence,
-            steps=env.step_count,
-            premature_required_fixes=env.premature_required_fixes,
-        )
-        results.append(
-            {
-                "task_id": task_id,
-                "steps": env.step_count,
-                "score": score,
-                "rewards": rewards,
-                "applied_fixes": list(env.applied_fixes),
-                "found_causes": sorted(env.found_causes),
-            }
-        )
+            score = grade(
+                task_id=task_id,
+                applied_fixes=env.applied_fixes,
+                found_causes=env.found_causes,
+                evidence=env.evidence,
+                steps=env.step_count,
+                premature_required_fixes=env.premature_required_fixes,
+            )
+            results.append(
+                {
+                    "task_id": task_id,
+                    "steps": env.step_count,
+                    "score": score,
+                    "rewards": rewards,
+                    "applied_fixes": list(env.applied_fixes),
+                    "found_causes": sorted(env.found_causes),
+                }
+            )
+        finally:
+            env.close()
 
     return {"env": "ml-debug-env", "results": results}

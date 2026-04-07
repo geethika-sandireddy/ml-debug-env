@@ -1,3 +1,19 @@
+---
+title: ML Training Run Debugger
+emoji: "hammer_and_wrench"
+colorFrom: blue
+colorTo: gray
+sdk: docker
+app_port: 7860
+tags:
+  - openenv
+  - reinforcement-learning
+  - fastapi
+  - debugging
+  - machine-learning
+pinned: false
+---
+
 # ML Training Run Debugger
 
 OpenEnv environment where the agent debugs broken training runs: read logs and metrics, inspect configs, then propose and apply fixes. FastAPI server, three graded tasks (easy → hard).
