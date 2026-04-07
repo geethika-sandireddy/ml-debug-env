@@ -124,6 +124,7 @@ def run_task(task_id: str, client: Optional[OpenAI]) -> float:
             found_causes=env.found_causes,
             evidence=env.evidence,
             premature_required_fixes=env.premature_required_fixes,
+            wrong_fix_attempts=env.wrong_fix_attempts,
             steps=env.step_count,
         )
         return score
@@ -139,6 +140,7 @@ def run_task(task_id: str, client: Optional[OpenAI]) -> float:
                 found_causes=env.found_causes,
                 evidence=env.evidence,
                 premature_required_fixes=env.premature_required_fixes,
+                wrong_fix_attempts=env.wrong_fix_attempts,
                 steps=env.step_count,
             )
             if env.task_id

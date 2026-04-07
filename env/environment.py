@@ -51,6 +51,7 @@ class MLDebugEnv:
         self.found_causes: set[str] = set()
         self.evidence: set[str] = set()
         self.premature_required_fixes = 0
+        self.wrong_fix_attempts = 0
         self.visible_logs: dict[str, str] = {}
         self.visible_metrics: dict[str, str] = {}
         self.visible_config: dict[str, str] = {}
@@ -72,6 +73,7 @@ class MLDebugEnv:
         self.found_causes = set()
         self.evidence = set()
         self.premature_required_fixes = 0
+        self.wrong_fix_attempts = 0
         self.visible_logs = {}
         self.visible_metrics = {}
         self.visible_config = {}
@@ -128,6 +130,7 @@ class MLDebugEnv:
                 found_causes=self.found_causes,
                 evidence=self.evidence,
                 premature_required_fixes=self.premature_required_fixes,
+                wrong_fix_attempts=self.wrong_fix_attempts,
                 steps=self.step_count,
             ),
         }
@@ -184,6 +187,7 @@ class MLDebugEnv:
                     found_causes=self.found_causes,
                     evidence=self.evidence,
                     premature_required_fixes=self.premature_required_fixes,
+                    wrong_fix_attempts=self.wrong_fix_attempts,
                     steps=self.step_count,
                 ),
             },
@@ -256,7 +260,6 @@ class MLDebugEnv:
             self.message = f"{fix_id} was already applied."
             return 0.0, "Fix already applied."
 
-        self.pending_fix = fix_id
         required_fixes = self.task["required_fixes"] if self.task else []
         is_required_fix = fix_id in required_fixes
         addressed_causes = fixes[fix_id].get("addresses", [])
@@ -264,14 +267,18 @@ class MLDebugEnv:
 
         if not is_required_fix:
             self.last_action_error = "wrong_fix"
+            self.wrong_fix_attempts += 1
+            self.pending_fix = None
             self.message = f"Queued wrong fix '{fix_id}' (not required for this task)."
-            return 0.05, self.message
+            return 0.0, self.message
 
         if missing_causes:
             self.last_action_error = "insufficient_evidence"
+            self.pending_fix = None
             self.message = f"Queued required fix '{fix_id}', but evidence is missing."
             return 0.0, self.message
 
+        self.pending_fix = fix_id
         self.last_action_error = None
         self.message = f"Queued required fix '{fix_id}' for application."
         return 0.15, self.message
@@ -292,12 +299,13 @@ class MLDebugEnv:
         self.applied_fixes.append(fix_id)
         required_fixes = self.task["required_fixes"] if self.task else []
         is_required_fix = fix_id in required_fixes
-        addressed_causes = fixes = self.task_data["fixes"].get(fix_id, {}).get("addresses", [])
+        addressed_causes = self.task_data["fixes"].get(fix_id, {}).get("addresses", [])
         missing_causes_now = [cause for cause in addressed_causes if cause not in self.found_causes]
 
         if not is_required_fix:
             self.last_action_error = "wrong_fix_applied"
-            reward = 0.05
+            self.wrong_fix_attempts += 1
+            reward = 0.0
             self.message = f"Applied wrong fix '{fix_id}'."
         elif missing_causes_now:
             self.last_action_error = "premature_fix"
@@ -320,4 +328,10 @@ class MLDebugEnv:
         if not self.task:
             return False
         required_fixes = self.task["required_fixes"]
-        return all(fix in self.applied_fixes for fix in required_fixes)
+        required_causes = self.task["required_causes"]
+        required_evidence = self.task.get("required_evidence", [])
+        return (
+            all(fix in self.applied_fixes for fix in required_fixes)
+            and all(cause in self.found_causes for cause in required_causes)
+            and all(ev in self.evidence for ev in required_evidence)
+        )

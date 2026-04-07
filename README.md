@@ -109,4 +109,7 @@ docker run -p 7860:7860 \
 
 ## Baseline scores (scripted policy)
 
-With the bundled planner: task_1, task_2, task_3 each reach `1.00` when run to completion.
+Current reproducible run (`python inference.py`):
+- `task_1`: `0.98`
+- `task_2`: `0.98`
+- `task_3`: `0.96`

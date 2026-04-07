@@ -76,6 +76,7 @@ def run_baseline_suite() -> dict:
                 evidence=env.evidence,
                 steps=env.step_count,
                 premature_required_fixes=env.premature_required_fixes,
+            wrong_fix_attempts=env.wrong_fix_attempts,
             )
             results.append(
                 {

@@ -8,6 +8,7 @@ def grade(
     evidence: set[str] | None = None,
     steps: int | None = None,
     premature_required_fixes: int = 0,
+    wrong_fix_attempts: int = 0,
 ) -> float:
     task = get_task(task_id)
     required_causes = task["required_causes"]
@@ -39,12 +40,16 @@ def grade(
             efficiency = max(0.0, 1.0 - 0.35 * used_ratio)
 
     premature_penalty = 0.1 * min(1.0, premature_required_fixes / max(1, len(required_fixes)))
+    attempt_penalty = 0.12 * min(1.0, wrong_fix_attempts / max(1, len(required_fixes)))
 
     score = (
-        0.25 * evidence_quality
-        + 0.25 * diagnosis_quality
-        + 0.35 * fix_quality
-        + 0.15 * efficiency
+        0.30 * evidence_quality
+        + 0.30 * diagnosis_quality
+        + 0.30 * fix_quality
+        + 0.10 * efficiency
     )
-    score = max(0.0, min(1.0, score - premature_penalty))
+    # If causes are not diagnosed, cap final score to prevent "blind fix" exploit.
+    if diagnosis_quality < 1.0:
+        score = min(score, 0.55)
+    score = max(0.0, min(1.0, score - premature_penalty - attempt_penalty))
     return round(score, 2)

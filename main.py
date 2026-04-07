@@ -25,9 +25,16 @@ app = FastAPI(
 
 DEFAULT_SESSION_ID = "default"
 _sessions: dict[str, MLDebugEnv] = {}
+MAX_SESSIONS = 256
 
 
 def _get_env(session_id: str) -> MLDebugEnv:
+    if session_id in _sessions:
+        return _sessions[session_id]
+    if len(_sessions) >= MAX_SESSIONS:
+        # Remove oldest inserted session to avoid unbounded memory growth.
+        oldest_key = next(iter(_sessions))
+        _sessions.pop(oldest_key, None)
     if session_id not in _sessions:
         _sessions[session_id] = MLDebugEnv()
     return _sessions[session_id]
@@ -37,6 +44,9 @@ def _session_id_from_request(request: Request, *, allow_new: bool) -> str:
     header_value = request.headers.get("X-Session-Id")
     if header_value:
         return header_value
+    cookie_value = request.cookies.get("openenv_session_id")
+    if cookie_value:
+        return cookie_value
     if allow_new:
         return str(uuid4())
     return DEFAULT_SESSION_ID
@@ -53,8 +63,7 @@ def health() -> dict:
 
 @app.post("/reset")
 def reset(request: Request, body: ResetRequest = ResetRequest()) -> JSONResponse:
-    # Keep judge compatibility: when they don't send a header, we fall back to DEFAULT_SESSION_ID.
-    # When a header is provided, we create a separate episode per session.
+    # Keep strict compatibility for evaluators that do not handle headers/cookies.
     session_id = _session_id_from_request(request, allow_new=False)
     env = _get_env(session_id)
     try:
@@ -64,6 +73,7 @@ def reset(request: Request, body: ResetRequest = ResetRequest()) -> JSONResponse
 
     resp = JSONResponse(content=observation.model_dump())
     resp.headers["X-Session-Id"] = session_id
+    resp.set_cookie("openenv_session_id", session_id, httponly=True, samesite="lax")
     return resp
 
 
@@ -102,6 +112,7 @@ def grader(request: Request) -> dict:
             found_causes=env.found_causes,
             evidence=env.evidence,
             premature_required_fixes=env.premature_required_fixes,
+            wrong_fix_attempts=env.wrong_fix_attempts,
             steps=env.step_count,
         )
         if env.task_id
