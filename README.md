@@ -65,7 +65,7 @@ uvicorn main:app --host 0.0.0.0 --port 7860
 
 ## Baseline (`inference.py`)
 
-Uses the OpenAI-compatible client with env vars below. By default, `HF_TOKEN` is required (or `OPENAI_API_KEY`) so runs are model-driven. Optional local fallback is available only when `ALLOW_SCRIPTED_FALLBACK=1`.
+Uses the OpenAI-compatible client with env vars below. By default, if `HF_TOKEN` (or `OPENAI_API_KEY`) is missing, the script falls back to the deterministic baseline policy so execution still completes. Set `ALLOW_SCRIPTED_FALLBACK=0` to force token-required mode.
 
 ```bash
 export API_BASE_URL="https://router.huggingface.co/v1"
