@@ -21,7 +21,7 @@ def test_default_session_reset_and_step() -> None:
     reset = client.post("/reset", json={"task_id": "task_1"})
     assert reset.status_code == 200
     session_id = reset.headers["X-Session-Id"]
-    assert session_id
+    assert session_id == "default"
 
     step = client.post(
         "/step",
@@ -30,6 +30,21 @@ def test_default_session_reset_and_step() -> None:
     )
     assert step.status_code == 200
     assert step.json()["observation"]["task_id"] == "task_1"
+
+
+def test_stateless_reset_then_step_separate_clients() -> None:
+    """Simulates evaluators that POST /reset then /step without forwarding cookie or header."""
+    c1 = TestClient(app)
+    c2 = TestClient(app)
+    r1 = c1.post("/reset", json={"task_id": "task_1"})
+    assert r1.status_code == 200
+    assert r1.headers["X-Session-Id"] == "default"
+    r2 = c2.post(
+        "/step",
+        json={"action_type": "inspect_config", "target": "val_transform"},
+    )
+    assert r2.status_code == 200
+    assert r2.json()["observation"]["task_id"] == "task_1"
 
 
 def test_isolated_sessions_keep_independent_tasks() -> None:

@@ -16,13 +16,13 @@ pinned: false
 
 # ML Training Run Debugger
 
-OpenEnv environment where the agent debugs broken training runs: read logs and metrics, inspect configs, then propose and apply fixes. FastAPI server, three graded tasks (easy → hard).
+OpenEnv environment where the agent debugs broken training runs: read logs and metrics, inspect configs, then propose and apply fixes. FastAPI server, three graded tasks (easy -> hard).
 
 **Live Space:** [geetss-ml-debug-env.hf.space](https://geetss-ml-debug-env.hf.space)
 
 ## Motivation
 
-These are recurring real issues: train/val preprocessing mismatch, softmax applied twice before CE, and “good” train/val numbers that hide leakage, imbalance, or a misleading metric. The env encodes each as a small scripted scenario with deterministic grading.
+These are recurring real issues: train/val preprocessing mismatch, softmax applied twice before CE, and "good" train/val numbers that hide leakage, imbalance, or a misleading metric. The env encodes each as a small scripted scenario with deterministic grading.
 
 ## Tasks
 
@@ -65,7 +65,7 @@ uvicorn main:app --host 0.0.0.0 --port 7860
 
 ## Baseline (`inference.py`)
 
-Uses the OpenAI-compatible client with env vars below. If there is no token, it falls back to a small scripted policy so the script still finishes.
+Uses the OpenAI-compatible client with env vars below. By default, `HF_TOKEN` is required (or `OPENAI_API_KEY`) so runs are model-driven. Optional local fallback is available only when `ALLOW_SCRIPTED_FALLBACK=1`.
 
 ```bash
 export API_BASE_URL="https://router.huggingface.co/v1"
@@ -100,6 +100,10 @@ docker run -p 7860:7860 \
 | GET | `/tasks` | Task list |
 | GET | `/grader` | Score snapshot |
 | GET | `/baseline` | Scripted baseline |
+
+Session behavior:
+- If `X-Session-Id` header or `openenv_session_id` cookie is present, that session is used (isolated clients).
+- If neither is present, the API falls back to a shared `default` session for stateless evaluators.
 
 ## Notes
 

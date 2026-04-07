@@ -1,5 +1,5 @@
+from collections import OrderedDict
 from typing import Optional
-from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -23,42 +23,37 @@ app = FastAPI(
     version="1.0.0",
 )
 
-_sessions: dict[str, MLDebugEnv] = {}
+_sessions: "OrderedDict[str, MLDebugEnv]" = OrderedDict()
 MAX_SESSIONS = 256
+# Stateless HTTP clients (no X-Session-Id, no cookie) share this bucket so /reset then /step works.
+DEFAULT_SESSION_ID = "default"
 
 
 def _get_env(session_id: str) -> MLDebugEnv:
     if session_id in _sessions:
-        return _sessions[session_id]
+        env = _sessions[session_id]
+        _sessions.move_to_end(session_id)
+        return env
     if len(_sessions) >= MAX_SESSIONS:
-        # Remove oldest inserted session to avoid unbounded memory growth.
-        oldest_key = next(iter(_sessions))
-        _sessions.pop(oldest_key, None)
+        # LRU eviction: remove least-recently-used session first.
+        _sessions.popitem(last=False)
     if session_id not in _sessions:
         _sessions[session_id] = MLDebugEnv()
     return _sessions[session_id]
 
 
-def _session_id_from_request(request: Request, *, allow_new: bool) -> str:
+def _session_id_from_request(request: Request) -> str:
     header_value = request.headers.get("X-Session-Id")
     if header_value:
         return header_value
     cookie_value = request.cookies.get("openenv_session_id")
     if cookie_value:
         return cookie_value
-    if allow_new:
-        return str(uuid4())
     return ""
 
 
-def _require_session_id(request: Request) -> str:
-    session_id = _session_id_from_request(request, allow_new=False)
-    if not session_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Missing session. Call /reset first or provide X-Session-Id.",
-        )
-    return session_id
+def _effective_session_id(request: Request) -> str:
+    return _session_id_from_request(request) or DEFAULT_SESSION_ID
 
 
 @app.get("/")
@@ -72,7 +67,7 @@ def health() -> dict:
 
 @app.post("/reset")
 def reset(request: Request, body: ResetRequest = ResetRequest()) -> JSONResponse:
-    session_id = _session_id_from_request(request, allow_new=True)
+    session_id = _session_id_from_request(request) or DEFAULT_SESSION_ID
     env = _get_env(session_id)
     try:
         observation = env.reset(task_id=body.task_id)
@@ -87,7 +82,7 @@ def reset(request: Request, body: ResetRequest = ResetRequest()) -> JSONResponse
 
 @app.post("/step")
 def step(request: Request, action: Action) -> dict:
-    session_id = _require_session_id(request)
+    session_id = _effective_session_id(request)
     env = _get_env(session_id)
     try:
         result = env.step(action)
@@ -98,7 +93,7 @@ def step(request: Request, action: Action) -> dict:
 
 @app.get("/state")
 def state(request: Request) -> dict:
-    session_id = _require_session_id(request)
+    session_id = _effective_session_id(request)
     env = _get_env(session_id)
     return env.state()
 
@@ -110,7 +105,7 @@ def tasks() -> dict:
 
 @app.get("/grader")
 def grader(request: Request) -> dict:
-    session_id = _require_session_id(request)
+    session_id = _effective_session_id(request)
     env = _get_env(session_id)
     return {
         "task_id": env.task_id,
