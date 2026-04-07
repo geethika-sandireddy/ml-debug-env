@@ -1,6 +1,6 @@
 ---
 title: ML Training Run Debugger
-emoji: "hammer_and_wrench"
+emoji: "🛠️"
 colorFrom: blue
 colorTo: gray
 sdk: docker
