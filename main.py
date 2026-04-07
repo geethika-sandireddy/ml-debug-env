@@ -23,7 +23,6 @@ app = FastAPI(
     version="1.0.0",
 )
 
-DEFAULT_SESSION_ID = "default"
 _sessions: dict[str, MLDebugEnv] = {}
 MAX_SESSIONS = 256
 
@@ -49,7 +48,17 @@ def _session_id_from_request(request: Request, *, allow_new: bool) -> str:
         return cookie_value
     if allow_new:
         return str(uuid4())
-    return DEFAULT_SESSION_ID
+    return ""
+
+
+def _require_session_id(request: Request) -> str:
+    session_id = _session_id_from_request(request, allow_new=False)
+    if not session_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing session. Call /reset first or provide X-Session-Id.",
+        )
+    return session_id
 
 
 @app.get("/")
@@ -63,8 +72,7 @@ def health() -> dict:
 
 @app.post("/reset")
 def reset(request: Request, body: ResetRequest = ResetRequest()) -> JSONResponse:
-    # Keep strict compatibility for evaluators that do not handle headers/cookies.
-    session_id = _session_id_from_request(request, allow_new=False)
+    session_id = _session_id_from_request(request, allow_new=True)
     env = _get_env(session_id)
     try:
         observation = env.reset(task_id=body.task_id)
@@ -79,7 +87,7 @@ def reset(request: Request, body: ResetRequest = ResetRequest()) -> JSONResponse
 
 @app.post("/step")
 def step(request: Request, action: Action) -> dict:
-    session_id = _session_id_from_request(request, allow_new=False)
+    session_id = _require_session_id(request)
     env = _get_env(session_id)
     try:
         result = env.step(action)
@@ -90,7 +98,7 @@ def step(request: Request, action: Action) -> dict:
 
 @app.get("/state")
 def state(request: Request) -> dict:
-    session_id = _session_id_from_request(request, allow_new=False)
+    session_id = _require_session_id(request)
     env = _get_env(session_id)
     return env.state()
 
@@ -102,7 +110,7 @@ def tasks() -> dict:
 
 @app.get("/grader")
 def grader(request: Request) -> dict:
-    session_id = _session_id_from_request(request, allow_new=False)
+    session_id = _require_session_id(request)
     env = _get_env(session_id)
     return {
         "task_id": env.task_id,

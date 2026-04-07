@@ -59,7 +59,6 @@ def format_action(action: Action) -> str:
 def choose_action(client: Optional[OpenAI], env: MLDebugEnv) -> Action:
     if client is None:
         return select_next_action(env)
-
     try:
         completion = client.chat.completions.create(
             model=MODEL_NAME,

@@ -1,6 +1,6 @@
 ---
 title: ML Training Run Debugger
-emoji: "🛠️"
+emoji: "wrench"
 colorFrom: blue
 colorTo: gray
 sdk: docker
@@ -26,19 +26,19 @@ These are recurring real issues: train/val preprocessing mismatch, softmax appli
 
 ## Tasks
 
-### Task 1 — easy: train/val scaling mismatch
+### Task 1 - easy: train/val scaling mismatch
 
 - Symptom: high train accuracy, flat validation.
 - Likely cause: validation pipeline missing normalization that training has.
 - Goal: find it in the configs, propose the matching fix, apply it.
 
-### Task 2 — medium: double softmax
+### Task 2 - medium: double softmax
 
 - Symptom: loss goes down while accuracy goes down.
 - Likely cause: logits passed through softmax twice on the way to cross-entropy.
 - Goal: trace the loss path and apply the fix.
 
-### Task 3 — hard: silent generalization failure
+### Task 3 - hard: silent generalization failure
 
 - Symptom: strong train/val, weak test, no crashes.
 - Causes: split leakage, class skew, wrong headline metric.

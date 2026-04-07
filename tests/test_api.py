@@ -20,9 +20,14 @@ def test_health_and_tasks_endpoints() -> None:
 def test_default_session_reset_and_step() -> None:
     reset = client.post("/reset", json={"task_id": "task_1"})
     assert reset.status_code == 200
-    assert reset.headers["X-Session-Id"] == "default"
+    session_id = reset.headers["X-Session-Id"]
+    assert session_id
 
-    step = client.post("/step", json={"action_type": "inspect_config", "target": "val_transform"})
+    step = client.post(
+        "/step",
+        headers={"X-Session-Id": session_id},
+        json={"action_type": "inspect_config", "target": "val_transform"},
+    )
     assert step.status_code == 200
     assert step.json()["observation"]["task_id"] == "task_1"
 
