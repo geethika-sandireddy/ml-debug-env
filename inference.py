@@ -13,15 +13,13 @@ API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Llama-3.1-8B-Instruct")
 HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("OPENAI_API_KEY")
 LOCAL_IMAGE_NAME = os.getenv("LOCAL_IMAGE_NAME", "")
-# Default to fallback for submission resilience when token injection is missing.
-ALLOW_SCRIPTED_FALLBACK = os.getenv("ALLOW_SCRIPTED_FALLBACK", "1") in {"1", "true", "TRUE", "yes", "YES"}
 MAX_STEPS = 12
 TEMPERATURE = 0.0
 
 
 def build_client() -> Optional[OpenAI]:
     if not HF_TOKEN:
-        return None
+        raise RuntimeError("HF_TOKEN (or OPENAI_API_KEY) is required for token-backed inference.")
     return OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
 
 
@@ -156,7 +154,16 @@ def run_task(task_id: str, client: Optional[OpenAI]) -> float:
 
 
 def main() -> int:
-    client = build_client()
+    try:
+        client = build_client()
+    except RuntimeError as exc:
+        print(f"[START] task=bootstrap env=ml-debug-env model={MODEL_NAME}", flush=True)
+        print(
+            "[END] success=false steps=0 score=0.00 rewards= error="
+            + str(exc).replace("\n", " "),
+            flush=True,
+        )
+        return 1
     for task_id in ("task_1", "task_2", "task_3"):
         run_task(task_id, client)
     return 0
