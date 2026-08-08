@@ -1,13 +1,20 @@
 """Baseline runner with strict [START]/[STEP]/[END] logs."""
 
 import json
+import logging
 import os
-from typing import Optional
 
-from openai import OpenAI
+from openai import APIError, APITimeoutError, OpenAI
+from pydantic import ValidationError
 
 from env import Action, MLDebugEnv, grade
 from env.baseline import select_next_action
+
+# [START]/[STEP]/[END] lines are a required stdout contract for the scoring
+# harness, so those stay on print(). Everything else -- unexpected failures,
+# fallback triggers -- goes through this logger instead of being swallowed.
+logger = logging.getLogger("ml_debug_env.inference")
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "meta-llama/Llama-3.1-8B-Instruct")
@@ -17,7 +24,7 @@ MAX_STEPS = 12
 TEMPERATURE = 0.0
 
 
-def build_client() -> Optional[OpenAI]:
+def build_client() -> OpenAI | None:
     if not HF_TOKEN:
         raise RuntimeError("HF_TOKEN (or OPENAI_API_KEY) is required for token-backed inference.")
     return OpenAI(base_url=API_BASE_URL, api_key=HF_TOKEN)
@@ -33,7 +40,7 @@ def prompt_for_action(observation: dict) -> str:
     )
 
 
-def extract_action(text: str) -> Optional[dict]:
+def extract_action(text: str) -> dict | None:
     if not text:
         return None
     text = text.strip()
@@ -56,7 +63,7 @@ def format_action(action: Action) -> str:
     return f"{action.action_type}()"
 
 
-def choose_action(client: Optional[OpenAI], env: MLDebugEnv) -> Action:
+def choose_action(client: OpenAI | None, env: MLDebugEnv) -> Action:
     if client is None:
         return select_next_action(env)
     try:
@@ -82,14 +89,20 @@ def choose_action(client: Optional[OpenAI], env: MLDebugEnv) -> Action:
         if parsed:
             try:
                 return Action(**parsed)
-            except Exception:
-                pass
+            except ValidationError:
+                logger.warning(
+                    "Model returned a malformed action payload; falling back to scripted policy.",
+                    exc_info=True,
+                )
+        else:
+            logger.warning("Model response was not valid JSON; falling back to scripted policy.")
         return select_next_action(env)
-    except Exception:
+    except (APIError, APITimeoutError):
+        logger.warning("LLM API call failed; falling back to scripted policy.", exc_info=True)
         return select_next_action(env)
 
 
-def run_task(task_id: str, client: Optional[OpenAI]) -> float:
+def run_task(task_id: str, client: OpenAI | None) -> float:
     env = MLDebugEnv()
     observation = env.reset(task_id=task_id)
     rewards: list[float] = []
@@ -128,6 +141,11 @@ def run_task(task_id: str, client: Optional[OpenAI]) -> float:
         )
         return score
     except Exception:
+        # Broad on purpose: this is the top-level per-task guard for the scoring
+        # harness, so one buggy episode must not crash the whole suite. Unlike
+        # the narrower catches above, this one is logged with a full traceback
+        # so failures are still diagnosable after the run.
+        logger.exception("Unexpected error while running task %s.", task_id)
         return 0.0
     finally:
         env.close()
