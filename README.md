@@ -16,9 +16,42 @@ pinned: false
 
 # ML Training Run Debugger
 
-OpenEnv environment where an agent debugs broken training runs: read logs and metrics, inspect configs, then propose and apply fixes. The benchmark is packaged as a FastAPI server with three deterministic tasks ordered from easy to hard.
+[![CI](https://github.com/geethika-sandireddy/ml-agent-debug-benchmark/actions/workflows/ci.yml/badge.svg)](https://github.com/geethika-sandireddy/ml-agent-debug-benchmark/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Live Space](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Live%20Space-blue)](https://geetss-ml-debug-env.hf.space)
+
+OpenEnv-compatible RL environment for evaluating whether an LLM agent can debug ML systems: it reads logs, metrics, and configs, then proposes and applies fixes, on three deterministic tasks of increasing difficulty. Packaged as a stateless-or-stateful FastAPI server so any HTTP client — human, script, or agent — can drive it, and deployed live on Hugging Face Spaces.
 
 **Live Space:** [geetss-ml-debug-env.hf.space](https://geetss-ml-debug-env.hf.space)
+
+## Architecture
+
+```
+                     ┌──────────────────────┐
+   agent / client ──▶│  FastAPI (main.py)   │
+   (HTTP: reset,     │  session resolution   │
+    step, state,     │  (header / cookie /   │
+    grader, tasks)   │   shared default)      │
+                     └──────────┬───────────┘
+                                │
+                     ┌──────────▼───────────┐
+                     │   MLDebugEnv          │
+                     │   (env/environment.py)│
+                     │   Action → step()     │
+                     │   → Observation +     │
+                     │     Reward             │
+                     └────┬─────────────┬────┘
+                          │             │
+              ┌───────────▼──┐   ┌──────▼────────┐
+              │ simulator.py │   │  graders.py    │
+              │ scripted     │   │  deterministic │
+              │ logs/metrics │   │  0.0–1.0 score │
+              │ /configs per │   │  from evidence, │
+              │ task         │   │  causes, fixes  │
+              └──────────────┘   └────────────────┘
+```
+
+`inference.py` is a separate client that drives the same environment through an OpenAI-compatible LLM (or the scripted baseline in `env/baseline.py` as a fallback), emitting the `[START]/[STEP]/[END]` log contract required for scoring.
 
 ## Motivation
 
@@ -113,6 +146,17 @@ pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 7860
 ```
 
+## Testing & CI
+
+```bash
+pip install -r requirements.txt
+pip install pytest pytest-cov ruff
+ruff check .
+pytest --cov=env --cov=server --cov=main --cov-report=term-missing
+```
+
+Every push and pull request to `main` runs lint (`ruff`) and the full test suite via GitHub Actions (see `.github/workflows/ci.yml`). Current coverage is ~83%, with `env/environment.py` — the core state machine — at 90%.
+
 ## Baseline (`inference.py`)
 
 Uses the OpenAI-compatible client with env vars below. `HF_TOKEN` (or `OPENAI_API_KEY`) is required for inference runs.
@@ -182,4 +226,13 @@ Current reproducible run (`python inference.py`):
 
 - The environment is intentionally deterministic and compact rather than fully open-ended.
 - The current benchmark focuses on three failure families, not the full space of ML debugging issues.
+- Session state is held in-process (an LRU-capped in-memory dict); it does not survive a restart and would need an external store (e.g. Redis) to run behind multiple replicas.
 - Future extensions could add optimizer bugs, label corruption, data loader failures, and distributed training diagnostics.
+
+## Acknowledgements
+
+Built for the **Meta × PyTorch OpenEnv Hackathon**, in partnership with **Scaler School of Technology**.
+
+## License
+
+[MIT](LICENSE)
