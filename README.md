@@ -26,30 +26,14 @@ OpenEnv-compatible RL environment for evaluating whether an LLM agent can debug 
 
 ## Architecture
 
+```mermaid
+graph TD
+    A[Agent / Client<br><small>HTTP: reset, step, state, grader, tasks</small>] --> B(FastAPI main.py<br>Session Resolution<br><small>header / cookie / shared default</small>)
+    B --> C(MLDebugEnv env/environment.py<br>Action ➔ step<br>➔ Observation + Reward)
+    C --> D(simulator.py<br><small>Scripted logs/metrics/configs per task</small>)
+    C --> E(graders.py<br><small>Deterministic 0.0-1.0 score from evidence, causes, fixes</small>)
 ```
-                     ┌──────────────────────┐
-   agent / client ──▶│  FastAPI (main.py)   │
-   (HTTP: reset,     │  session resolution   │
-    step, state,     │  (header / cookie /   │
-    grader, tasks)   │   shared default)      │
-                     └──────────┬───────────┘
-                                │
-                     ┌──────────▼───────────┐
-                     │   MLDebugEnv          │
-                     │   (env/environment.py)│
-                     │   Action → step()     │
-                     │   → Observation +     │
-                     │     Reward             │
-                     └────┬─────────────┬────┘
-                          │             │
-              ┌───────────▼──┐   ┌──────▼────────┐
-              │ simulator.py │   │  graders.py    │
-              │ scripted     │   │  deterministic │
-              │ logs/metrics │   │  0.0–1.0 score │
-              │ /configs per │   │  from evidence, │
-              │ task         │   │  causes, fixes  │
-              └──────────────┘   └────────────────┘
-```
+
 
 `inference.py` is a separate client that drives the same environment through an OpenAI-compatible LLM (or the scripted baseline in `env/baseline.py` as a fallback), emitting the `[START]/[STEP]/[END]` log contract required for scoring.
 
