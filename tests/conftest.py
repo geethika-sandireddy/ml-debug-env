@@ -1,6 +1,5 @@
-from pathlib import Path
 import sys
-
+from pathlib import Path
 
 # Make local package imports stable for both `pytest` and `python -m pytest`.
 ROOT = Path(__file__).resolve().parents[1]

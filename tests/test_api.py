@@ -3,7 +3,6 @@ from fastapi.testclient import TestClient
 from env import Action, MLDebugEnv, grade
 from main import app
 
-
 client = TestClient(app)
 
 

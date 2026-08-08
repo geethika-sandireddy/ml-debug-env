@@ -1,6 +1,5 @@
 from copy import deepcopy
 
-
 TASKS = {
     "task_1": {
         "id": "task_1",

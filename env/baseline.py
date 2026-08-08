@@ -1,7 +1,6 @@
 from env.environment import Action, MLDebugEnv
 from env.graders import grade
 
-
 TASK_PLANS = {
     "task_1": [
         Action(action_type="inspect_config", target="val_transform"),
@@ -49,9 +48,8 @@ def select_next_action(env: MLDebugEnv) -> Action:
             continue
         if action.action_type == "inspect_config" and action.target in env.visible_config:
             continue
-        if action.action_type == "propose_fix":
-            if action.target in env.applied_fixes:
-                continue
+        if action.action_type == "propose_fix" and action.target in env.applied_fixes:
+            continue
         return action
 
     return Action(action_type="read_log", target="training_metrics")

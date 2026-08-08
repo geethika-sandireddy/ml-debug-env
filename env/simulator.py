@@ -1,6 +1,5 @@
 from copy import deepcopy
 
-
 SIMULATED_TASK_DATA = {
     "task_1": {
         "logs": {

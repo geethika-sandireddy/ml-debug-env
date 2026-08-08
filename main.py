@@ -1,5 +1,4 @@
 from collections import OrderedDict
-from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -11,7 +10,7 @@ from env.tasks import list_tasks
 
 
 class ResetRequest(BaseModel):
-    task_id: Optional[str] = Field(default=None, description="Task to reset into.")
+    task_id: str | None = Field(default=None, description="Task to reset into.")
 
 
 app = FastAPI(
@@ -66,7 +65,8 @@ def health() -> dict:
 
 
 @app.post("/reset")
-def reset(request: Request, body: ResetRequest = ResetRequest()) -> JSONResponse:
+def reset(request: Request, body: ResetRequest | None = None) -> JSONResponse:
+    body = body or ResetRequest()
     session_id = _session_id_from_request(request) or DEFAULT_SESSION_ID
     env = _get_env(session_id)
     try:
