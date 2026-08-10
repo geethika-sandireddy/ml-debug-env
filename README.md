@@ -20,7 +20,7 @@ pinned: false
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Live Space](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Live%20Space-blue)](https://geetss-ml-debug-env.hf.space)
 
-OpenEnv-compatible RL environment for evaluating whether an LLM agent can debug ML systems: it reads logs, metrics, and configs, then proposes and applies fixes, on three deterministic tasks of increasing difficulty. Packaged as a stateless-or-stateful FastAPI server so any HTTP client — human, script, or agent — can drive it, and deployed live on Hugging Face Spaces.
+OpenEnv-compatible RL environment for evaluating whether an LLM agent can debug ML systems: it reads logs, metrics, and configs, then proposes and applies fixes, on three deterministic tasks of increasing difficulty. Packaged as a stateless-or-stateful FastAPI server so any HTTP client - human, script, or agent - can drive it, and deployed live on Hugging Face Spaces.
 
 **Live Space:** [geetss-ml-debug-env.hf.space](https://geetss-ml-debug-env.hf.space)
 
@@ -139,7 +139,7 @@ ruff check .
 pytest --cov=env --cov=server --cov=main --cov-report=term-missing
 ```
 
-Every push and pull request to `main` runs lint (`ruff`) and the full test suite via GitHub Actions (see `.github/workflows/ci.yml`). Current coverage is ~83%, with `env/environment.py` — the core state machine — at 90%.
+Every push and pull request to `main` runs lint (`ruff`) and the full test suite via GitHub Actions (see `.github/workflows/ci.yml`). Current coverage is ~83%, with `env/environment.py` - the core state machine - at 90%.
 
 ## Baseline (`inference.py`)
 
